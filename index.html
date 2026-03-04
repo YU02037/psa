@@ -1192,14 +1192,27 @@ async function savePNG() {
   btn.disabled = true;
 
   await hideUIAndCapture(async (canvas) => {
-    const dataUrl = canvas.toDataURL('image/png');
-
-    if (isIOS()) {
-      showIOSImageOverlay(dataUrl);
+    if (isIOS() && navigator.share) {
+      // iPhoneのシェアシートを使って「写真に保存」できるようにする
+      canvas.toBlob(async (blob) => {
+        const file = new File([blob], 'ポケモンカード買取表.png', { type: 'image/png' });
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'ポケモンカード買取表',
+          });
+        } catch (e) {
+          // キャンセルした場合は何もしない
+          if (e.name !== 'AbortError') {
+            showIOSFallback(canvas.toDataURL('image/png'));
+          }
+        }
+      }, 'image/png');
     } else {
+      // PC / Android：通常ダウンロード
       const link = document.createElement('a');
       link.download = 'ポケモンカード買取表.png';
-      link.href = dataUrl;
+      link.href = canvas.toDataURL('image/png');
       link.click();
     }
   });
@@ -1208,7 +1221,8 @@ async function savePNG() {
   btn.disabled = false;
 }
 
-function showIOSImageOverlay(dataUrl) {
+// シェアAPIが使えない古いiOSの場合のフォールバック（長押し保存）
+function showIOSFallback(dataUrl) {
   const overlay = document.createElement('div');
   overlay.style.cssText = `
     position: fixed; inset: 0; background: rgba(0,0,0,0.95);
