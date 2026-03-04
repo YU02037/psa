@@ -1150,41 +1150,56 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// iOSシェア用：ポスターのHTMLをそのまま新しいタブで開く
+// iOSシェア用：同ページ内にポスターを全画面オーバーレイ表示
 function openSharePage() {
+  // すでに表示中なら閉じる
+  const existing = document.getElementById('iosShareOverlay');
+  if (existing) { existing.remove(); return; }
+
+  // ボタン類を一時的に隠す
+  const hideEls = document.querySelectorAll('#posterActions, .card-item [style*="position:absolute"]');
+  hideEls.forEach(el => el.style.visibility = 'hidden');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'iosShareOverlay';
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 99999;
+    background: #0d1117;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column;
+  `;
+
+  // ガイドバー（上部）
+  const guide = document.createElement('div');
+  guide.style.cssText = `
+    background: #1e2d45; color: #e8edf5;
+    text-align: center; padding: 14px 16px;
+    font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.8;
+    position: sticky; top: 0; z-index: 2; flex-shrink: 0;
+    border-bottom: 1px solid #2a4060;
+  `;
+  guide.innerHTML = `
+    📱 下部の <strong>共有ボタン（□↑）</strong> をタップ →「写真に保存」or「LINE」
+    <button onclick="document.getElementById('iosShareOverlay').remove();document.querySelectorAll('#posterActions,.card-item [style*=\'position:absolute\']').forEach(el=>el.style.visibility='')"
+      style="margin-left:12px;background:#cc2200;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:13px;cursor:pointer;">✕ 閉じる</button>
+  `;
+
+  // ポスターコンテンツ（クローン）
   const poster = document.querySelector('.poster');
-  const posterHTML = poster.outerHTML;
+  const clone = poster.cloneNode(true);
 
-  // 現在のスタイルをすべて取得
-  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-    .map(el => el.outerHTML).join('\n');
+  // クローン内の編集UI・ボタンを非表示
+  clone.querySelectorAll('#posterActions, [style*="position:absolute"]').forEach(el => el.remove());
+  clone.style.cssText = 'width:100%;max-width:100%;margin:0;border:none;flex:1;';
 
-  const html = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>ポケモンカード買取表</title>
-${styles}
-<style>
-  body { margin: 0; padding: 0; background: #0d1117; }
-  .poster { margin: 0 auto; border: none; }
-  /* 保存UIは非表示 */
-  #posterActions, .side-deco { display: none !important; }
-</style>
-</head>
-<body>
-${posterHTML}
-<div style="background:#1e2d45;color:#e8edf5;text-align:center;padding:16px;font-family:sans-serif;font-size:14px;line-height:1.8;position:sticky;bottom:0;">
-  📱 Safari下部の <strong>共有ボタン（□↑）</strong> をタップ<br>
-  →「写真に保存」または「LINEで送信」
-</div>
-</body>
-</html>`;
+  overlay.appendChild(guide);
+  overlay.appendChild(clone);
+  document.body.appendChild(overlay);
 
-  const blob = new Blob([html], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');
+  // 閉じたらボタンも戻す
+  overlay.addEventListener('remove', () => {
+    hideEls.forEach(el => el.style.visibility = '');
+  });
 }
 
 async function hideUIAndCapture(callback) {
