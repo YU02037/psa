@@ -1145,33 +1145,35 @@ async function hideUIAndCapture(callback) {
   hint.style.display = 'none';
   deleteBtns.forEach(b => b.style.visibility = 'hidden');
 
-  await new Promise(r => setTimeout(r, 100));
+  // Google Fontsの外部リンクを一時的に無効化してCORSエラーを防ぐ
+  const fontLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"]');
+  fontLinks.forEach(l => l.disabled = true);
+
+  await new Promise(r => setTimeout(r, 150));
 
   try {
     const poster = document.querySelector('.poster');
     const canvas = await html2canvas(poster, {
       backgroundColor: '#0d1117',
-      scale: isIOS() ? 1 : 2,
-      useCORS: true,
+      scale: isIOS() ? 1.5 : 2,
+      useCORS: false,
       allowTaint: true,
       foreignObjectRendering: false,
       logging: false,
-      imageTimeout: 0,
+      imageTimeout: 15000,
       onclone: (doc) => {
-        // フォントをシステムフォントに置き換えてiOSのセキュリティエラーを回避
+        // 外部フォントをすべて無効化してシステムフォントに切り替え
+        doc.querySelectorAll('link[href*="fonts.googleapis.com"]').forEach(l => l.remove());
         const style = doc.createElement('style');
         style.textContent = `
-          * { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif !important; }
-          .psa-logo, .main-title, .price, .footer-date, .sub-label {
-            font-family: Impact, 'Arial Narrow Bold', Arial, sans-serif !important;
-          }
+          @font-face { font-family: 'Bebas Neue'; src: local('Impact'), local('Arial Narrow'); }
+          @font-face { font-family: 'Noto Sans JP'; src: local('Hiragino Sans'), local('Yu Gothic'), local('Meiryo'), local('Arial'); }
         `;
-        doc.head.appendChild(style);
+        doc.head.insertBefore(style, doc.head.firstChild);
       }
     });
     await callback(canvas);
   } catch(e) {
-    // Canvasが完全に失敗した場合はiOS向けスクリーンショット案内を表示
     if (isIOS()) {
       showIOSScreenshotGuide();
     } else {
@@ -1182,6 +1184,7 @@ async function hideUIAndCapture(callback) {
     controls.style.display = '';
     hint.style.display = '';
     deleteBtns.forEach(b => b.style.visibility = '');
+    fontLinks.forEach(l => l.disabled = false);
   }
 }
 
@@ -1192,22 +1195,27 @@ async function savePNG() {
   btn.disabled = true;
 
   await hideUIAndCapture(async (canvas) => {
-    if (isIOS() && navigator.share) {
-      // iPhoneのシェアシートを使って「写真に保存」できるようにする
-      canvas.toBlob(async (blob) => {
-        const file = new File([blob], 'ポケモンカード買取表.png', { type: 'image/png' });
-        try {
-          await navigator.share({
-            files: [file],
-            title: 'ポケモンカード買取表',
-          });
-        } catch (e) {
-          // キャンセルした場合は何もしない
-          if (e.name !== 'AbortError') {
-            showIOSFallback(canvas.toDataURL('image/png'));
-          }
-        }
-      }, 'image/png');
+    if (isIOS()) {
+      // iPhoneはシェアシート経由で「写真に保存」
+      if (navigator.canShare && navigator.share) {
+        await new Promise((resolve) => {
+          canvas.toBlob(async (blob) => {
+            const file = new File([blob], 'pokemon-buyback.png', { type: 'image/png' });
+            if (navigator.canShare({ files: [file] })) {
+              try {
+                await navigator.share({ files: [file], title: 'ポケモンカード買取表' });
+              } catch (e) {
+                if (e.name !== 'AbortError') showIOSFallback(canvas.toDataURL('image/png'));
+              }
+            } else {
+              showIOSFallback(canvas.toDataURL('image/png'));
+            }
+            resolve();
+          }, 'image/png');
+        });
+      } else {
+        showIOSFallback(canvas.toDataURL('image/png'));
+      }
     } else {
       // PC / Android：通常ダウンロード
       const link = document.createElement('a');
