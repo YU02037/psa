@@ -1129,28 +1129,33 @@
 <script>
 let cardCount = 20;
 
+// iPhoneかどうか判定
+function isIOS() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 async function hideUIAndCapture(callback) {
-  // Hide all editing UI elements
   const posterActions = document.getElementById('posterActions');
   const controls = document.querySelector('.controls');
   const hint = document.querySelector('.hint');
   const deleteBtns = document.querySelectorAll('.card-item [style*="position:absolute"]');
-  
+
   posterActions.style.display = 'none';
   controls.style.display = 'none';
   hint.style.display = 'none';
   deleteBtns.forEach(b => b.style.visibility = 'hidden');
 
-  // Small delay to let DOM update
-  await new Promise(r => setTimeout(r, 50));
+  await new Promise(r => setTimeout(r, 100));
 
   try {
     const poster = document.querySelector('.poster');
     const canvas = await html2canvas(poster, {
       backgroundColor: '#0d1117',
-      scale: 2,
+      scale: isIOS() ? 1.5 : 2,
       useCORS: true,
-      logging: false
+      allowTaint: true,
+      logging: false,
+      imageTimeout: 0,
     });
     await callback(canvas);
   } catch(e) {
@@ -1168,14 +1173,66 @@ async function savePNG() {
   const orig = btn.innerHTML;
   btn.innerHTML = '⏳ 生成中...';
   btn.disabled = true;
+
   await hideUIAndCapture(async (canvas) => {
-    const link = document.createElement('a');
-    link.download = 'ポケモンカード買取表.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    const dataUrl = canvas.toDataURL('image/png');
+
+    if (isIOS()) {
+      // iPhoneの場合：画像を新しいタブで開いて「長押し保存」に誘導
+      const newTab = window.open();
+      if (newTab) {
+        newTab.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>保存してください</title>
+            <style>
+              body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; color: #fff; gap: 16px; padding: 20px; box-sizing: border-box; }
+              p { font-size: 15px; text-align: center; color: #aaa; line-height: 1.7; background: #222; padding: 14px 20px; border-radius: 10px; }
+              img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
+            </style>
+          </head>
+          <body>
+            <p>📱 画像を<strong>長押し</strong>して<br>「写真に追加」または「画像を保存」</p>
+            <img src="${dataUrl}" alt="ポケモンカード買取表">
+          </body>
+          </html>
+        `);
+        newTab.document.close();
+      } else {
+        // ポップアップブロックされた場合はページ内にオーバーレイ表示
+        showIOSOverlay(dataUrl);
+      }
+    } else {
+      // PC/Android：通常ダウンロード
+      const link = document.createElement('a');
+      link.download = 'ポケモンカード買取表.png';
+      link.href = dataUrl;
+      link.click();
+    }
   });
+
   btn.innerHTML = orig;
   btn.disabled = false;
+}
+
+function showIOSOverlay(dataUrl) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; padding: 20px; box-sizing: border-box; gap: 16px;
+  `;
+  overlay.innerHTML = `
+    <p style="color:#fff;font-size:15px;text-align:center;line-height:1.7;background:#222;padding:14px 20px;border-radius:10px;margin:0;">
+      📱 画像を<strong>長押し</strong>して<br>「写真に追加」または「画像を保存」
+    </p>
+    <img src="${dataUrl}" style="max-width:100%;max-height:60vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.8);">
+    <button onclick="this.closest('div').remove()" style="background:#333;color:#fff;border:1px solid #555;padding:10px 28px;border-radius:8px;font-size:14px;cursor:pointer;">閉じる</button>
+  `;
+  document.body.appendChild(overlay);
 }
 
 async function savePDF() {
@@ -1183,19 +1240,27 @@ async function savePDF() {
   const orig = btn.innerHTML;
   btn.innerHTML = '⏳ 生成中...';
   btn.disabled = true;
+
+  if (isIOS()) {
+    // iPhoneではPDFの代わりにPNG保存に誘導
+    btn.innerHTML = orig;
+    btn.disabled = false;
+    alert('iPhoneではPDF保存の代わりに「PNG保存」をご利用ください。');
+    return;
+  }
+
   await hideUIAndCapture(async (canvas) => {
-    // Use jsPDF to create PDF from canvas
     const { jsPDF } = window.jspdf;
     const imgData = canvas.toDataURL('image/png');
     const imgWidth = canvas.width;
     const imgHeight = canvas.height;
-    // A4 landscape or fit to content
-    const pdfW = imgWidth * 0.264583; // px to mm at 96dpi
+    const pdfW = imgWidth * 0.264583;
     const pdfH = imgHeight * 0.264583;
     const pdf = new jsPDF({ orientation: pdfW > pdfH ? 'l' : 'p', unit: 'mm', format: [pdfW, pdfH] });
     pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
     pdf.save('ポケモンカード買取表.pdf');
   });
+
   btn.innerHTML = orig;
   btn.disabled = false;
 }
