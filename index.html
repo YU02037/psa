@@ -1097,9 +1097,9 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
       PNG保存
     </button>
-    <button class="poster-btn ios-share-btn" id="iosShareBtn" onclick="openSharePage()" style="display:none;background:linear-gradient(135deg,#1a3a6e,#2a5ab0);border-color:#2a5ab0;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-      📱 共有・保存
+    <button class="poster-btn ios-share-btn" id="iosShareBtn" onclick="startScreenshot()" style="display:none;background:linear-gradient(135deg,#1a3a6e,#2a5ab0);border-color:#2a5ab0;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+      📷 保存する
     </button>
   </div>
 
@@ -1150,56 +1150,37 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// iOSシェア用：同ページ内にポスターを全画面オーバーレイ表示
-function openSharePage() {
-  // すでに表示中なら閉じる
-  const existing = document.getElementById('iosShareOverlay');
-  if (existing) { existing.remove(); return; }
+// iOSスクリーンショット用：編集UIを隠してポスターだけ表示
+function startScreenshot() {
+  const uiEls = document.querySelectorAll('#posterActions, .controls, .hint, .card-item [style*="position:absolute"]');
+  uiEls.forEach(el => el.style.visibility = 'hidden');
 
-  // ボタン類を一時的に隠す
-  const hideEls = document.querySelectorAll('#posterActions, .card-item [style*="position:absolute"]');
-  hideEls.forEach(el => el.style.visibility = 'hidden');
-
-  const overlay = document.createElement('div');
-  overlay.id = 'iosShareOverlay';
-  overlay.style.cssText = `
-    position: fixed; inset: 0; z-index: 99999;
-    background: #0d1117;
-    overflow-y: auto; -webkit-overflow-scrolling: touch;
-    display: flex; flex-direction: column;
-  `;
-
-  // ガイドバー（上部）
-  const guide = document.createElement('div');
-  guide.style.cssText = `
+  // 案内バナーを表示
+  const banner = document.createElement('div');
+  banner.id = 'screenshotBanner';
+  banner.style.cssText = `
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;
     background: #1e2d45; color: #e8edf5;
-    text-align: center; padding: 14px 16px;
-    font-family: -apple-system, sans-serif; font-size: 14px; line-height: 1.8;
-    position: sticky; top: 0; z-index: 2; flex-shrink: 0;
-    border-bottom: 1px solid #2a4060;
+    text-align: center; padding: 16px;
+    font-family: -apple-system, sans-serif; font-size: 15px; line-height: 1.8;
+    border-top: 2px solid #f5c518;
   `;
-  guide.innerHTML = `
-    📱 下部の <strong>共有ボタン（□↑）</strong> をタップ →「写真に保存」or「LINE」
-    <button onclick="document.getElementById('iosShareOverlay').remove();document.querySelectorAll('#posterActions,.card-item [style*=\'position:absolute\']').forEach(el=>el.style.visibility='')"
-      style="margin-left:12px;background:#cc2200;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:13px;cursor:pointer;">✕ 閉じる</button>
+  banner.innerHTML = `
+    <div>📷 <strong>電源ボタン＋音量アップ</strong> でスクリーンショットを撮ってください</div>
+    <button onclick="endScreenshot()" style="
+      margin-top: 10px; background: #f5c518; color: #111;
+      border: none; border-radius: 8px; padding: 10px 32px;
+      font-size: 15px; font-weight: bold; cursor: pointer;
+    ">✅ 撮り終わった</button>
   `;
+  document.body.appendChild(banner);
+}
 
-  // ポスターコンテンツ（クローン）
-  const poster = document.querySelector('.poster');
-  const clone = poster.cloneNode(true);
-
-  // クローン内の編集UI・ボタンを非表示
-  clone.querySelectorAll('#posterActions, [style*="position:absolute"]').forEach(el => el.remove());
-  clone.style.cssText = 'width:100%;max-width:100%;margin:0;border:none;flex:1;';
-
-  overlay.appendChild(guide);
-  overlay.appendChild(clone);
-  document.body.appendChild(overlay);
-
-  // 閉じたらボタンも戻す
-  overlay.addEventListener('remove', () => {
-    hideEls.forEach(el => el.style.visibility = '');
-  });
+function endScreenshot() {
+  const uiEls = document.querySelectorAll('#posterActions, .controls, .hint, .card-item [style*="position:absolute"]');
+  uiEls.forEach(el => el.style.visibility = '');
+  const banner = document.getElementById('screenshotBanner');
+  if (banner) banner.remove();
 }
 
 async function hideUIAndCapture(callback) {
