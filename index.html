@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ポケモンカード PSA10 買取表</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet" crossorigin="anonymous">
 <style>
   :root {
     --bg: #111827;
@@ -1151,15 +1151,32 @@ async function hideUIAndCapture(callback) {
     const poster = document.querySelector('.poster');
     const canvas = await html2canvas(poster, {
       backgroundColor: '#0d1117',
-      scale: isIOS() ? 1.5 : 2,
+      scale: isIOS() ? 1 : 2,
       useCORS: true,
       allowTaint: true,
+      foreignObjectRendering: false,
       logging: false,
       imageTimeout: 0,
+      onclone: (doc) => {
+        // フォントをシステムフォントに置き換えてiOSのセキュリティエラーを回避
+        const style = doc.createElement('style');
+        style.textContent = `
+          * { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif !important; }
+          .psa-logo, .main-title, .price, .footer-date, .sub-label {
+            font-family: Impact, 'Arial Narrow Bold', Arial, sans-serif !important;
+          }
+        `;
+        doc.head.appendChild(style);
+      }
     });
     await callback(canvas);
   } catch(e) {
-    alert('保存に失敗しました: ' + e.message);
+    // Canvasが完全に失敗した場合はiOS向けスクリーンショット案内を表示
+    if (isIOS()) {
+      showIOSScreenshotGuide();
+    } else {
+      alert('保存に失敗しました: ' + e.message);
+    }
   } finally {
     posterActions.style.display = '';
     controls.style.display = '';
@@ -1178,35 +1195,8 @@ async function savePNG() {
     const dataUrl = canvas.toDataURL('image/png');
 
     if (isIOS()) {
-      // iPhoneの場合：画像を新しいタブで開いて「長押し保存」に誘導
-      const newTab = window.open();
-      if (newTab) {
-        newTab.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>保存してください</title>
-            <style>
-              body { margin: 0; background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: sans-serif; color: #fff; gap: 16px; padding: 20px; box-sizing: border-box; }
-              p { font-size: 15px; text-align: center; color: #aaa; line-height: 1.7; background: #222; padding: 14px 20px; border-radius: 10px; }
-              img { max-width: 100%; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.8); }
-            </style>
-          </head>
-          <body>
-            <p>📱 画像を<strong>長押し</strong>して<br>「写真に追加」または「画像を保存」</p>
-            <img src="${dataUrl}" alt="ポケモンカード買取表">
-          </body>
-          </html>
-        `);
-        newTab.document.close();
-      } else {
-        // ポップアップブロックされた場合はページ内にオーバーレイ表示
-        showIOSOverlay(dataUrl);
-      }
+      showIOSImageOverlay(dataUrl);
     } else {
-      // PC/Android：通常ダウンロード
       const link = document.createElement('a');
       link.download = 'ポケモンカード買取表.png';
       link.href = dataUrl;
@@ -1218,19 +1208,42 @@ async function savePNG() {
   btn.disabled = false;
 }
 
-function showIOSOverlay(dataUrl) {
+function showIOSImageOverlay(dataUrl) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    z-index: 9999; padding: 20px 16px; box-sizing: border-box; gap: 14px;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  `;
+  overlay.innerHTML = `
+    <p style="color:#fff;font-size:15px;text-align:center;line-height:1.8;background:#1e2d45;padding:14px 20px;border-radius:12px;margin:0;width:100%;box-sizing:border-box;">
+      📱 下の画像を<strong>長押し</strong>して<br>「写真に追加」または「画像を保存」
+    </p>
+    <img src="${dataUrl}" style="width:100%;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.8);display:block;">
+    <button onclick="this.closest('div').remove()" style="background:#1e2d45;color:#e8edf5;border:1px solid #2a4060;padding:12px 36px;border-radius:10px;font-size:15px;cursor:pointer;margin-bottom:20px;">✕ 閉じる</button>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function showIOSScreenshotGuide() {
   const overlay = document.createElement('div');
   overlay.style.cssText = `
     position: fixed; inset: 0; background: rgba(0,0,0,0.92);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    z-index: 9999; padding: 20px; box-sizing: border-box; gap: 16px;
+    z-index: 9999; padding: 24px; box-sizing: border-box; gap: 16px;
   `;
   overlay.innerHTML = `
-    <p style="color:#fff;font-size:15px;text-align:center;line-height:1.7;background:#222;padding:14px 20px;border-radius:10px;margin:0;">
-      📱 画像を<strong>長押し</strong>して<br>「写真に追加」または「画像を保存」
-    </p>
-    <img src="${dataUrl}" style="max-width:100%;max-height:60vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.8);">
-    <button onclick="this.closest('div').remove()" style="background:#333;color:#fff;border:1px solid #555;padding:10px 28px;border-radius:8px;font-size:14px;cursor:pointer;">閉じる</button>
+    <div style="background:#1e2d45;border-radius:16px;padding:24px;max-width:320px;text-align:center;color:#e8edf5;line-height:1.8;">
+      <div style="font-size:36px;margin-bottom:8px;">📱</div>
+      <div style="font-weight:700;font-size:16px;margin-bottom:12px;">スクリーンショットで保存</div>
+      <div style="font-size:14px;color:#aac4e0;">
+        iPhoneでは画面を<br>
+        <strong>電源ボタン＋音量アップ</strong><br>
+        を同時押しで保存できます
+      </div>
+    </div>
+    <button onclick="this.closest('div').remove()" style="background:#1e2d45;color:#e8edf5;border:1px solid #2a4060;padding:12px 36px;border-radius:10px;font-size:15px;cursor:pointer;">閉じる</button>
   `;
   document.body.appendChild(overlay);
 }
@@ -1238,16 +1251,14 @@ function showIOSOverlay(dataUrl) {
 async function savePDF() {
   const btn = document.querySelector('.pdf-btn');
   const orig = btn.innerHTML;
-  btn.innerHTML = '⏳ 生成中...';
-  btn.disabled = true;
 
   if (isIOS()) {
-    // iPhoneではPDFの代わりにPNG保存に誘導
-    btn.innerHTML = orig;
-    btn.disabled = false;
     alert('iPhoneではPDF保存の代わりに「PNG保存」をご利用ください。');
     return;
   }
+
+  btn.innerHTML = '⏳ 生成中...';
+  btn.disabled = true;
 
   await hideUIAndCapture(async (canvas) => {
     const { jsPDF } = window.jspdf;
